@@ -5,8 +5,17 @@ export async function GET(req: Request) {
   try {
     const supabase = await createClient();
 
-    // Получаем текущего пользователя
-    const { data: claimsData } = await supabase.auth.getClaims();
+    const { data: claimsData, error: claimsError } =
+      await supabase.auth.getClaims();
+
+    if (claimsError) {
+      console.error("Realtime feedback auth error:", claimsError);
+      return NextResponse.json(
+        { error: "Authentication failed" },
+        { status: 401 }
+      );
+    }
+
     const userId = claimsData?.claims?.sub;
 
     if (!userId) {
@@ -16,7 +25,6 @@ export async function GET(req: Request) {
       );
     }
 
-    // Получаем sessionId из URL
     const url = new URL(req.url);
     const sessionId = url.searchParams.get("sessionId");
 
@@ -27,12 +35,19 @@ export async function GET(req: Request) {
       );
     }
 
-    // Получаем профиль пользователя
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("company_id")
       .eq("id", userId)
       .maybeSingle();
+
+    if (profileError) {
+      console.error("Realtime feedback profile error:", profileError);
+      return NextResponse.json(
+        { error: "Failed to load profile" },
+        { status: 500 }
+      );
+    }
 
     if (!profile?.company_id) {
       return NextResponse.json(
@@ -41,8 +56,7 @@ export async function GET(req: Request) {
       );
     }
 
-    // Получаем тренировочную сессию
-    const { data: session } = await supabase
+    const { data: session, error: sessionError } = await supabase
       .from("realtime_training_sessions")
       .select(
         "id, scenario_id, score, engine_state, created_at, duration_seconds"
@@ -51,6 +65,14 @@ export async function GET(req: Request) {
       .eq("company_id", profile.company_id)
       .maybeSingle();
 
+    if (sessionError) {
+      console.error("Realtime feedback session error:", sessionError);
+      return NextResponse.json(
+        { error: "Failed to load session" },
+        { status: 500 }
+      );
+    }
+
     if (!session) {
       return NextResponse.json(
         { error: "Session not found" },
@@ -58,15 +80,20 @@ export async function GET(req: Request) {
       );
     }
 
-    // Получаем feedback по тренировке
-    const { data: feedback } = await supabase
+    const { data: feedback, error: feedbackError } = await supabase
       .from("realtime_training_feedback")
       .select("*")
       .eq("session_id", sessionId)
       .maybeSingle();
 
-    // Feedback может отсутствовать —
-    // это не ошибка, если анализ ещё не был создан.
+    if (feedbackError) {
+      console.error("Realtime feedback load error:", feedbackError);
+      return NextResponse.json(
+        { error: "Failed to load feedback" },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({
       session,
       feedback: feedback ?? null,
@@ -74,16 +101,9 @@ export async function GET(req: Request) {
   } catch (error: unknown) {
     console.error("Realtime feedback GET error:", error);
 
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Internal server error";
-
     return NextResponse.json(
-      { error: message },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
 }
-
-
