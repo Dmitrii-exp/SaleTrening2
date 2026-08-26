@@ -25,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/dashboard/recommendations">Рекомендации</Link>
             <Link href="/dashboard/scenarios">Сценарии</Link>
             <Link href="/settings/company">Компания</Link>
+            <Link href="/settings/billing">Тариф</Link>
           </nav>
         </aside>
         <main className="appMain">{children}</main>
