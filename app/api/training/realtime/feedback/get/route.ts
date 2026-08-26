@@ -5,6 +5,7 @@ export async function GET(req: Request) {
   try {
     const supabase = await createClient();
 
+    // Получаем текущего пользователя
     const { data: claimsData } = await supabase.auth.getClaims();
     const userId = claimsData?.claims?.sub;
 
@@ -15,6 +16,7 @@ export async function GET(req: Request) {
       );
     }
 
+    // Получаем sessionId из URL
     const url = new URL(req.url);
     const sessionId = url.searchParams.get("sessionId");
 
@@ -25,18 +27,14 @@ export async function GET(req: Request) {
       );
     }
 
-    const { data: profile, error: profileError } = await supabase
+    // Получаем профиль пользователя
+    const profileResult = await supabase
       .from("profiles")
       .select("company_id")
       .eq("id", userId)
       .maybeSingle();
 
-    if (profileError) {
-      return NextResponse.json(
-        { error: profileError.message },
-        { status: 400 }
-      );
-    }
+    const profile = profileResult.data;
 
     if (!profile?.company_id) {
       return NextResponse.json(
@@ -45,7 +43,8 @@ export async function GET(req: Request) {
       );
     }
 
-    const { data: session, error: sessionError } = await supabase
+    // Получаем тренировочную сессию
+    const sessionResult = await supabase
       .from("realtime_training_sessions")
       .select(
         "id, scenario_id, score, engine_state, created_at, duration_seconds"
@@ -54,12 +53,7 @@ export async function GET(req: Request) {
       .eq("company_id", profile.company_id)
       .maybeSingle();
 
-    if (sessionError) {
-      return NextResponse.json(
-        { error: sessionError.message },
-        { status: 400 }
-      );
-    }
+    const session = sessionResult.data;
 
     if (!session) {
       return NextResponse.json(
@@ -68,29 +62,37 @@ export async function GET(req: Request) {
       );
     }
 
-    const { data: feedback, error: feedbackError } = await supabase
+    // Получаем feedback по тренировке
+    const feedbackResult = await supabase
       .from("realtime_training_feedback")
       .select("*")
       .eq("session_id", sessionId)
       .maybeSingle();
 
-    if (feedbackError) {
-      return NextResponse.json(
-        { error: feedbackError.message },
-        { status: 400 }
-      );
-    }
+    const feedback = feedbackResult.data;
 
+    // Feedback может отсутствовать — это не ошибка.
+    // Например, анализ ещё не был создан.
     return NextResponse.json({
       session,
       feedback: feedback ?? null,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Realtime feedback GET error:", error);
 
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Internal server error";
+
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: message },
       { status: 500 }
     );
   }
 }
+13:17
+
+
+Сегодня
+
