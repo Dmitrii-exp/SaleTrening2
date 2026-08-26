@@ -17,7 +17,8 @@ export default function RegisterPage() {
     if (!form.companyName.trim()) { setError("Название компании обязательно"); setBusy(false); return; }
     if (form.password !== form.confirm) { setError("Пароли не совпадают"); setBusy(false); return; }
     if (form.password.length < 8) { setError("Пароль должен содержать минимум 8 символов"); setBusy(false); return; }
-    const { data, error: authError } = await supabase.auth.signUp({ email: form.email.trim(), password: form.password, options: { data: { company_name: form.companyName.trim(), first_name: form.firstName.trim(), last_name: form.lastName.trim() } } });
+    const redirect = typeof window !== "undefined" ? `${window.location.origin}/auth/callback?next=/onboarding` : undefined;
+    const { data, error: authError } = await supabase.auth.signUp({ email: form.email.trim(), password: form.password, options: { emailRedirectTo: redirect, data: { company_name: form.companyName.trim(), first_name: form.firstName.trim(), last_name: form.lastName.trim() } } });
     if (authError) setError(authError.message || "Не удалось зарегистрироваться");
     else if (data.session) router.push("/onboarding");
     else setMessage("Регистрация создана. Проверьте email и подтвердите адрес, затем войдите.");
