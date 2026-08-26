@@ -1,20 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-function score(state: any, messages: any[]) {
-  let result = 50;
-  if (Number(state?.trust || 0) > 55) result += 15;
-  if (Number(state?.resistance || 100) < 45) result += 10;
-  if (Number(state?.buyProbability || 0) > 60) result += 15;
-
-  const manager = messages.filter((message: any) => message?.role === "manager");
-  const questions = manager.filter((message: any) =>
-    /[?]|как|что|почему|какой|расскаж/.test(String(message?.content || "").toLowerCase())
-  ).length;
-
-  result += Math.min(10, questions * 2);
-  return Math.max(0, Math.min(100, Math.round(result)));
-}
+import { calculateTrainingScore } from "@/lib/training/scenario-engine";
+import { normalizeScenario } from "@/lib/training/scenario-types";
 
 export async function POST(req: Request) {
   try {
@@ -35,28 +22,31 @@ export async function POST(req: Request) {
       .eq("id", userId)
       .maybeSingle();
 
-    if (profileError) return NextResponse.json({ error: profileError.message }, { status: 400 });
+    if (profileError) return NextResponse.json({ error: "Failed to load profile" }, { status: 400 });
     if (!profile?.company_id) return NextResponse.json({ error: "Company not found" }, { status: 403 });
 
-    const { data: scenario, error: scenarioError } = await supabase
+    const { data: scenarioRow, error: scenarioError } = await supabase
       .from("saletrening_scenarios")
-      .select("id,title")
+      .select("*")
       .eq("id", body.scenarioId)
       .eq("active", true)
       .maybeSingle();
 
-    if (scenarioError) return NextResponse.json({ error: scenarioError.message }, { status: 400 });
-    if (!scenario) return NextResponse.json({ error: "Scenario not found" }, { status: 404 });
+    if (scenarioError) return NextResponse.json({ error: "Failed to load scenario" }, { status: 400 });
+    if (!scenarioRow) return NextResponse.json({ error: "Scenario not found" }, { status: 404 });
 
-    const finalScore = score(body.state, body.messages);
+    const scenario = normalizeScenario(scenarioRow);
+    const state = body.state || {};
+    const finalScore = calculateTrainingScore(state, body.messages, scenario);
+
     const { data, error } = await supabase
       .from("realtime_training_sessions")
       .insert({
         company_id: profile.company_id,
         employee_id: userId,
-        scenario_id: scenario.id,
+        scenario_id: scenarioRow.id,
         messages: body.messages,
-        engine_state: body.state || {},
+        engine_state: state,
         score: finalScore,
         duration_seconds: Math.max(0, Number(body.durationSeconds || 0)),
         ai_feedback: `Итоговый результат: ${finalScore}%.`,
@@ -75,15 +65,18 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         score: data.score,
-        stageScores: body.state?.stageScores || {},
+        stageScores: state.stageScores || {},
       }),
     });
 
-    if (!learningResponse.ok) console.warn("Learning profile update failed after training completion");
+    if (!learningResponse.ok) {
+      console.warn("Learning profile update failed after training completion");
+    }
 
     return NextResponse.json({
       sessionId: data.id,
       score: data.score,
+      scenarioTitle: scenario.title,
       feedbackUrl: `/training/realtime/feedback?sessionId=${data.id}`,
     });
   } catch (error: unknown) {
