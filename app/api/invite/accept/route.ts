@@ -28,11 +28,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email аккаунта не совпадает с приглашением" }, { status: 403 });
   }
 
-  const { error: profileError } = await s.from("profiles").update({ company_id: invitation.company_id, role: invitation.role, updated_at: new Date().toISOString() }).eq("id", userId);
+  const now = new Date().toISOString();
+  const { error: profileError } = await s
+    .from("profiles")
+    .update({ company_id: invitation.company_id, role: invitation.role, updated_at: now })
+    .eq("id", userId);
+
   if (profileError) return NextResponse.json({ error: "Не удалось привязать аккаунт к компании" }, { status: 400 });
 
-  await s.from("organization_members").upsert({ company_id: invitation.company_id, user_id: userId, role: invitation.role, status: "active", joined_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "company_id,user_id" });
-  const { error: acceptError } = await s.from("company_invitations").update({ accepted_at: new Date().toISOString() }).eq("id", invitation.id);
+  const { error: acceptError } = await s
+    .from("company_invitations")
+    .update({ accepted_at: now })
+    .eq("id", invitation.id)
+    .is("accepted_at", null);
+
   if (acceptError) return NextResponse.json({ error: "Не удалось завершить приглашение" }, { status: 400 });
 
   return NextResponse.json({ ok: true, companyId: invitation.company_id, role: invitation.role });
