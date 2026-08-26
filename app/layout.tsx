@@ -10,16 +10,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <nav>
             <Link href="/">Главная</Link>
             <Link href="/training/realtime">Тренировка</Link>
+            <Link href="/training/voice">Голос</Link>
             <Link href="/training/history">История</Link>
             <Link href="/training/plan">Мой план</Link>
             <Link href="/assignments">Назначения</Link>
             <Link href="/profile">Профиль</Link>
+            <Link href="/team">Команда</Link>
             <Link href="/achievements">Достижения</Link>
             <Link href="/leaderboard">Рейтинг</Link>
             <Link href="/notifications">Уведомления</Link>
             <Link href="/dashboard">Dashboard</Link>
             <Link href="/dashboard/goals">Цели</Link>
             <Link href="/dashboard/recommendations">Рекомендации</Link>
+            <Link href="/settings/company">Компания</Link>
           </nav>
         </aside>
         <main className="appMain">{children}</main>
