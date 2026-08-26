@@ -1,3 +1,87 @@
-import {NextResponse} from "next/server"; import {createClient} from "@/lib/supabase/server";
-function build(p:any,sc:any[]){const focus=p?.recommended_focus||"discovery";const avg=Number(p?.average_score||0);const diff=avg>=85?"hard":avg<55?"easy":"medium";const ranked=sc.map(x=>{let n=0;const hay=(x.title+" "+x.goal+" "+x.hidden_need+" "+(x.objections||[]).join(" ")).toLowerCase();if(hay.includes(focus.toLowerCase()))n+=8;if(x.difficulty===diff)n+=4;if(x.status==="published")n+=2;return{x,n}}).sort((a:any,b:any)=>b.n-a.n);const chosen=ranked.slice(0,5).map((x:any,i:number)=>({day:i+1,scenario:x.x,focus,reason:i===0?"Слабый навык":"Закрепление навыка"}));return{difficulty:diff,focus,days:chosen}}
-export async function GET(){const s=await createClient();const {data:c}=await s.auth.getClaims();if(!c?.claims?.sub)return NextResponse.json({error:"Unauthorized"},{status:401});const {data:p}=await s.from("profiles").select("company_id").eq("id",c.claims.sub).maybeSingle();if(!p?.company_id)return NextResponse.json({error:"Company not found"},{status:403});const {data:profile}=await s.from("employee_learning_profiles").select("*").eq("company_id",p.company_id).eq("employee_id",c.claims.sub).maybeSingle();const {data:sc}=await s.from("saletrening_scenarios").select("*").eq("company_id",p.company_id).eq("status","published");return NextResponse.json({plan:build(profile,sc||[])})}
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+
+function level(avg: number) {
+  if (avg >= 85) return "Сложный";
+  if (avg < 55) return "Лёгкий";
+  return "Средний";
+}
+
+function textScore(value: unknown, focus: string) {
+  const hay = String(value || "").toLowerCase();
+  const f = focus.toLowerCase();
+  if (!f) return 0;
+  if (hay.includes(f)) return 8;
+  if ((f.includes("discovery") || f.includes("потреб")) && /потреб|выяв|вопрос/.test(hay)) return 6;
+  if ((f.includes("objection") || f.includes("возраж")) && /возраж|дорог|цен/.test(hay)) return 6;
+  if ((f.includes("value") || f.includes("цен")) && /цен|стоим|выгод|польз/.test(hay)) return 6;
+  if ((f.includes("closing") || f.includes("закры")) && /закры|сделк|следующ/.test(hay)) return 6;
+  return 0;
+}
+
+function build(profile: any, scenarios: any[]) {
+  const focus = String(profile?.recommended_focus || "discovery");
+  const avg = Number(profile?.average_score || 0);
+  const targetDifficulty = level(avg);
+
+  const ranked = scenarios
+    .map((scenario) => {
+      let score = 0;
+      score += textScore(`${scenario.title} ${scenario.objective} ${scenario.goal}`, focus);
+      score += scenario.difficulty === targetDifficulty ? 5 : 0;
+      score += scenario.client_role ? 1 : 0;
+      return { scenario, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return {
+    difficulty: targetDifficulty,
+    focus,
+    days: ranked.slice(0, 5).map(({ scenario }, index) => ({
+      day: index + 1,
+      scenario,
+      focus,
+      reason: index === 0 ? "Главный слабый навык" : "Закрепление навыка",
+    })),
+  };
+}
+
+export async function GET() {
+  try {
+    const supabase = await createClient();
+    const { data: claimsData } = await supabase.auth.getClaims();
+    const userId = claimsData?.claims?.sub;
+
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("company_id")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!profile?.company_id) return NextResponse.json({ error: "Company not found" }, { status: 403 });
+
+    const [{ data: learning, error: learningError }, { data: scenarios, error: scenariosError }] = await Promise.all([
+      supabase
+        .from("employee_learning_profiles")
+        .select("*")
+        .eq("company_id", profile.company_id)
+        .eq("employee_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("saletrening_scenarios")
+        .select("id,title,description,difficulty,client_role,industry,objective,objections,active,created_at,client_mood,goal,required_questions,success_actions,failure_actions,evaluation_criteria,system_prompt,updated_at")
+        .eq("active", true)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    if (learningError) return NextResponse.json({ error: learningError.message }, { status: 400 });
+    if (scenariosError) return NextResponse.json({ error: scenariosError.message }, { status: 400 });
+
+    return NextResponse.json({ plan: build(learning, scenarios || []) });
+  } catch (error: unknown) {
+    console.error("Training plan error:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
