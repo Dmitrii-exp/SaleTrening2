@@ -91,8 +91,5 @@ export async function GET(req: Request) {
     );
   }
 }
-13:17
 
-
-Сегодня
 
