@@ -28,13 +28,11 @@ export async function GET(req: Request) {
     }
 
     // Получаем профиль пользователя
-    const profileResult = await supabase
+    const { data: profile } = await supabase
       .from("profiles")
       .select("company_id")
       .eq("id", userId)
       .maybeSingle();
-
-    const profile = profileResult.data;
 
     if (!profile?.company_id) {
       return NextResponse.json(
@@ -44,7 +42,7 @@ export async function GET(req: Request) {
     }
 
     // Получаем тренировочную сессию
-    const sessionResult = await supabase
+    const { data: session } = await supabase
       .from("realtime_training_sessions")
       .select(
         "id, scenario_id, score, engine_state, created_at, duration_seconds"
@@ -52,8 +50,6 @@ export async function GET(req: Request) {
       .eq("id", sessionId)
       .eq("company_id", profile.company_id)
       .maybeSingle();
-
-    const session = sessionResult.data;
 
     if (!session) {
       return NextResponse.json(
@@ -63,16 +59,14 @@ export async function GET(req: Request) {
     }
 
     // Получаем feedback по тренировке
-    const feedbackResult = await supabase
+    const { data: feedback } = await supabase
       .from("realtime_training_feedback")
       .select("*")
       .eq("session_id", sessionId)
       .maybeSingle();
 
-    const feedback = feedbackResult.data;
-
-    // Feedback может отсутствовать — это не ошибка.
-    // Например, анализ ещё не был создан.
+    // Feedback может отсутствовать —
+    // это не ошибка, если анализ ещё не был создан.
     return NextResponse.json({
       session,
       feedback: feedback ?? null,
