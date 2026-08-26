@@ -20,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/leaderboard">Рейтинг</Link>
             <Link href="/notifications">Уведомления</Link>
             <Link href="/dashboard">Dashboard</Link>
+            <Link href="/dashboard/effectiveness">Эффективность</Link>
             <Link href="/dashboard/goals">Цели</Link>
             <Link href="/dashboard/recommendations">Рекомендации</Link>
             <Link href="/dashboard/scenarios">Сценарии</Link>
