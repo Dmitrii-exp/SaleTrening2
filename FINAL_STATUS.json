@@ -1,0 +1,8 @@
+{
+  "project": "SaleTrening2.0",
+  "stage": "52-final",
+  "files": 63,
+  "env_template": ".env.example",
+  "deployment_guide": "FINAL_DEPLOYMENT.md",
+  "secret_safe": true
+}

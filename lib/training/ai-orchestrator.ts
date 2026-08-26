@@ -1,0 +1,1 @@
+export const aiOrchestrator={realtime:"GigaChat",feedback:"GigaChat",nextScenario:"rules+scenario matching",security:"server-side keys only"};
